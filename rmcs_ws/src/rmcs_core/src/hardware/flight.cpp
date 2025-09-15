@@ -67,27 +67,29 @@ public:
 
         using namespace rmcs_description;
 
-        // constexpr double rotor_distance_x = ;
-        // constexpr double rotor_distance_y = ;
+        constexpr double rotor_distance_x = 0.83637;
+        constexpr double rotor_distance_y = 0.83637;
 
-        // tf_->set_transform<BaseLink, LeftFrontWheelLink>(
-        //     Eigen::Translation3d{rotor_distance_x / 2, rotor_distance_y / 2, 0});
-        // tf_->set_transform<BaseLink, LeftBackWheelLink>(
-        //     Eigen::Translation3d{rotor_distance_x / 2, -rotor_distance_y / 2, 0});
-        // tf_->set_transform<BaseLink, RightBackWheelLink>(
-        //     Eigen::Translation3d{-rotor_distance_x / 2, rotor_distance_y / 2, 0});
-        // tf_->set_transform<BaseLink, RightFrontWheelLink>(
-        //     Eigen::Translation3d{-rotor_distance_x / 2, -rotor_distance_y / 2, 0});
-        //
-        // Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
-        //
-        // constexpr double gimbal_center_x = ;
-        // constexpr double gimbal_center_y = ;
-        // constexpr double gimbal_center_z = ;
-        // tf_->set_transform<BaseLink,GimbalCenterLink>(Eigen::Translation3d{gimbal_center_x,gimbal_center_y,gimbal_center_z});
+        tf_->set_transform<BaseLink, LeftFrontWheelLink>(
+            Eigen::Translation3d{rotor_distance_x / 2, rotor_distance_y / 2, 0});
+        tf_->set_transform<BaseLink, LeftBackWheelLink>(
+            Eigen::Translation3d{rotor_distance_x / 2, -rotor_distance_y / 2, 0});
+        tf_->set_transform<BaseLink, RightBackWheelLink>(
+            Eigen::Translation3d{-rotor_distance_x / 2, rotor_distance_y / 2, 0});
+        tf_->set_transform<BaseLink, RightFrontWheelLink>(
+            Eigen::Translation3d{-rotor_distance_x / 2, -rotor_distance_y / 2, 0});
 
-        // tf_->set_transform<PitchLink,CameraLink>(Eigen::Translation3d{ , , });
-        gimbal_calibrate_subscription_ = create_subscription<std_msgs::msg::Int32>(
+        Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+
+        constexpr double gimbal_center_x = 0;
+        constexpr double gimbal_center_y = 0;
+        constexpr double gimbal_center_z = 0.20552;
+        tf_->set_transform<BaseLink, GimbalCenterLink>(
+            Eigen::Translation3d{gimbal_center_x, gimbal_center_y, gimbal_center_z});
+
+        tf_->set_transform<PitchLink, CameraLink>(Eigen::Translation3d{0.0557, 0, 0.053});
+
+            gimbal_calibrate_subscription_ = create_subscription<std_msgs::msg::Int32>(
             "/gimbal/calibrate", rclcpp::QoS{0}, [this](std_msgs::msg::Int32::UniquePtr&& msg) {
                 gimbal_calibrate_subscription_callback(std::move(msg));
             });
