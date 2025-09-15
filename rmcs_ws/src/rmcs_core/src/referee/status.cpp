@@ -169,7 +169,7 @@ private:
     // use these indicators make sure the robot safe.
     // Muzzle: Cooling priority with level 1
     static constexpr int64_t safe_shooter_cooling    = 40;
-    static constexpr int64_t safe_shooter_heat_limit = 50'000;
+    static constexpr int64_t safe_shooter_heat_limit = 50'000'000;
     // Chassis: Health priority with level 1
     static constexpr double safe_chassis_power_limit = 45;
 

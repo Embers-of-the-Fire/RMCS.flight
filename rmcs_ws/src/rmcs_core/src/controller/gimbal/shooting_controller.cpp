@@ -4,6 +4,7 @@
 
 #include <eigen3/Eigen/Dense>
 #include <fast_tf/rcl.hpp>
+#include <rclcpp/logging.hpp>
 #include <rclcpp/node.hpp>
 #include <rmcs_description/tf_description.hpp>
 #include <rmcs_executor/component.hpp>

@@ -28,8 +28,8 @@ rmcs_executor:
 
       - rmcs_core::referee::Command -> referee_command
 
-      - rmcs_auto_aim::AutoAimInitializer -> auto_aim_initializer
-      - rmcs_auto_aim::AutoAimController -> auto_aim_controller
+      # - rmcs_auto_aim::AutoAimInitializer -> auto_aim_initializer
+      # - rmcs_auto_aim::AutoAimController -> auto_aim_controller
 
       - rmcs_core::controller::gimbal::ShootingRecorder -> shooting_recorder
 
