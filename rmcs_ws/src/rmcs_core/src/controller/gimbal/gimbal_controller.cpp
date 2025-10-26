@@ -1,5 +1,6 @@
 #include <cmath>
 
+#include <fast_tf/impl/cast.hpp>
 #include <limits>
 
 #include <eigen3/Eigen/Dense>
@@ -23,8 +24,10 @@ public:
         : Node(
               get_component_name(),
               rclcpp::NodeOptions{}.automatically_declare_parameters_from_overrides(true)) {
-        upper_limit_ = get_parameter("upper_limit").as_double() + (std::numbers::pi / 2);
-        lower_limit_ = get_parameter("lower_limit").as_double() + (std::numbers::pi / 2);
+        upper_limit_     = get_parameter("upper_limit").as_double() + (std::numbers::pi / 2);
+        lower_limit_     = get_parameter("lower_limit").as_double() + (std::numbers::pi / 2);
+        yaw_upper_limit_ = get_parameter("yaw_upper_limit").as_double();
+        yaw_lower_limit_ = get_parameter("yaw_lower_limit").as_double();
 
         register_input("/remote/joystick/left", joystick_left_);
         register_input("/remote/switch/right", switch_right_);
@@ -145,6 +148,30 @@ private:
                 Eigen::AngleAxisd{lower_limit_, (yaw_axis->cross(*dir)).normalized()} * (*yaw_axis);
     }
 
+    void clamp_yaw_control_direction(YawLink::DirectionVector& dir_1) {
+        dir_1->normalized();
+        auto reference_axis =
+            fast_tf::cast<YawLink>(OdomImu::DirectionVector{Eigen::Vector3d::UnitX()}, *tf_);
+        auto cos_angle     = reference_axis->dot(*dir_1);
+        control_direction_ = fast_tf::cast<OdomImu>(dir_1, *tf_);
+        if (abs(cos_angle) == 1) {
+            control_enabled = false;
+            return;
+        }
+
+        auto angle = std::acos(cos_angle);
+        if (angle < yaw_upper_limit_) {
+            *dir_1 =
+                Eigen::AngleAxisd{yaw_upper_limit_, (reference_axis->cross(*dir_1)).normalized()}
+                * (*reference_axis);
+        } else if (angle > yaw_lower_limit_) {
+            *dir_1 =
+                Eigen::AngleAxisd{yaw_lower_limit_, (reference_axis->cross(*dir_1)).normalized()}
+                * (*reference_axis);
+        }
+        control_direction_ = fast_tf::cast<OdomImu>(dir_1, *tf_);
+    }
+
     void update_control_errors(PitchLink::DirectionVector& dir) {
         auto yaw_axis = fast_tf::cast<PitchLink>(yaw_axis_filtered_, *tf_);
         double pitch  = -std::atan2(yaw_axis->x(), yaw_axis->z());
@@ -177,6 +204,7 @@ private:
     OdomImu::DirectionVector control_direction_{Eigen::Vector3d::Zero()};
     OdomImu::DirectionVector yaw_axis_filtered_{Eigen::Vector3d::UnitZ()};
     double upper_limit_, lower_limit_;
+    double yaw_upper_limit_, yaw_lower_limit_;
 
     OutputInterface<double> yaw_angle_error_, pitch_angle_error_;
 };

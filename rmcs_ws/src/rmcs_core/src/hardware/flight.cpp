@@ -15,7 +15,6 @@
 #include "hardware/device/bmi088.hpp"
 #include "hardware/device/dji_motor.hpp"
 #include "hardware/device/dr16.hpp"
-#include "hardware/device/gy614.hpp"
 #include "hardware/device/lk_motor.hpp"
 #include "librmcs/utility/ring_buffer.hpp"
 
@@ -32,29 +31,30 @@ public:
         , logger_(get_logger())
         , flight_command_(
               create_partner_component<FlightCommand>(get_component_name() + "_command", *this))
-        , gimbal_pitch_motor_(*this, *flight_command_, "/gimbal/pitch")
         , gimbal_yaw_motor_(*this, *flight_command_, "/gimbal/yaw")
+        , gimbal_pitch_motor_(*this, *flight_command_, "/gimbal/pitch")
         , gimbal_left_friction_(*this, *flight_command_, "/gimbal/left_friction")
         , gimbal_right_friction_(*this, *flight_command_, "/gimbal/right_friction")
         , gimbal_bullet_feeder_(*this, *flight_command_, "/gimbal/bullet_feeder")
         , dr16_(*this)
         , bmi088_(500.0, 0.3, 0.005)
 
-        , gy614_(*this, "/friction_wheels/temperature")
         , transmit_buffer_(*this, 32)
         , event_thread_([this]() { handle_events(); }) {
         gimbal_yaw_motor_.configure(
             device::LkMotor::Config{device::LkMotor::Type::MHF7015}.set_encoder_zero_point(
                 static_cast<int>(get_parameter("yaw_motor_zero_point").as_int())));
         gimbal_pitch_motor_.configure(
-            device::LkMotor::Config{device::LkMotor::Type::MG4005E_I10}.set_encoder_zero_point(
+            device::LkMotor::Config{device::LkMotor::Type::MG4010E_I10}.set_encoder_zero_point(
                 static_cast<int>(get_parameter("pitch_motor_zero_point").as_int())));
         gimbal_left_friction_.configure(
             device::DjiMotor::Config{device::DjiMotor::Type::M3508}
                 .set_reversed()
                 .set_reduction_ratio(1.));
         gimbal_right_friction_.configure(
-            device::DjiMotor::Config{device::DjiMotor::Type::M3508}.set_reduction_ratio(1.));
+            device::DjiMotor::Config{device::DjiMotor::Type::M3508}
+                
+                .set_reduction_ratio(1.));
         gimbal_bullet_feeder_.configure(
             device::DjiMotor::Config{device::DjiMotor::Type::M2006}.enable_multi_turn_angle());
 
@@ -78,8 +78,6 @@ public:
             Eigen::Translation3d{-rotor_distance_x / 2, rotor_distance_y / 2, 0});
         tf_->set_transform<BaseLink, RightFrontWheelLink>(
             Eigen::Translation3d{-rotor_distance_x / 2, -rotor_distance_y / 2, 0});
-
-        Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
 
         constexpr double gimbal_center_x = 0;
         constexpr double gimbal_center_y = 0;
@@ -113,7 +111,6 @@ public:
         update_motors();
         update_imu();
         dr16_.update_status();
-        gy614_.update_status();
     }
 
     void command_update() {
@@ -122,10 +119,10 @@ public:
         transmit_buffer_.add_can1_transmission(0x141, gimbal_yaw_motor_.generate_command());
         transmit_buffer_.add_can1_transmission(0x142, gimbal_pitch_motor_.generate_command());
 
-        can_commands[0] = 0;
-        can_commands[1] = gimbal_bullet_feeder_.generate_command();
-        can_commands[2] = gimbal_left_friction_.generate_command();
-        can_commands[3] = gimbal_right_friction_.generate_command();
+        can_commands[0] = gimbal_bullet_feeder_.generate_command();
+        can_commands[1] = gimbal_left_friction_.generate_command();
+        can_commands[2] = gimbal_right_friction_.generate_command();
+        can_commands[3] = 0;
         transmit_buffer_.add_can2_transmission(0x200, std::bit_cast<uint64_t>(can_commands));
     }
 
@@ -134,6 +131,7 @@ private:
         using namespace rmcs_description;
         gimbal_yaw_motor_.update_status();
         tf_->set_state<GimbalCenterLink, YawLink>(gimbal_yaw_motor_.angle());
+
         gimbal_pitch_motor_.update_status();
         tf_->set_state<YawLink, PitchLink>(gimbal_pitch_motor_.angle());
 
@@ -153,10 +151,10 @@ private:
     }
     void gimbal_calibrate_subscription_callback(std_msgs::msg::Int32::UniquePtr) {
         RCLCPP_INFO(
-            logger_, "[gimbal calibration] New yaw offset: %d",
+            logger_, "[gimbal calibration] New yaw offset: %ld",
             gimbal_yaw_motor_.calibrate_zero_point());
         RCLCPP_INFO(
-            logger_, "[gimbal calibration] New pitch offset: %d",
+            logger_, "[gimbal calibration] New pitch offset: %ld",
             gimbal_pitch_motor_.calibrate_zero_point());
     }
 
@@ -181,20 +179,16 @@ protected:
             return;
         if (can_id == 0x201) {
             gimbal_bullet_feeder_.store_status(can_data);
-        } else if (can_id == 0x202) {
-            gimbal_left_friction_.store_status(can_data);
         } else if (can_id == 0x203) {
             gimbal_right_friction_.store_status(can_data);
+        } else if (can_id == 0x202) {
+            gimbal_left_friction_.store_status(can_data);
         }
     }
 
     void uart1_receive_callback(const std::byte* uart_data, uint8_t uart_data_length) override {
         referee_ring_buffer_receive_.emplace_back_multi(
             [&uart_data](std::byte* storage) { *storage = *uart_data++; }, uart_data_length);
-    }
-
-    void uart2_receive_callback(const std::byte* data, uint8_t length) override {
-        gy614_.store_status(data, length);
     }
 
     void dbus_receive_callback(const std::byte* uart_data, uint8_t uart_data_length) override {
@@ -230,7 +224,6 @@ private:
 
     device::Dr16 dr16_;
     device::Bmi088 bmi088_;
-    device::Gy614 gy614_;
 
     OutputInterface<double> gimbal_yaw_velocity_imu_;
     OutputInterface<double> gimbal_pitch_velocity_imu_;
@@ -244,3 +237,7 @@ private:
     std::thread event_thread_;
 };
 } // namespace rmcs_core::hardware
+
+#include <pluginlib/class_list_macros.hpp>
+
+PLUGINLIB_EXPORT_CLASS(rmcs_core::hardware::Flight, rmcs_executor::Component)
