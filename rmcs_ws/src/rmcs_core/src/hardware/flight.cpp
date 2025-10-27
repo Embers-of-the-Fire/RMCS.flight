@@ -42,9 +42,11 @@ public:
         , transmit_buffer_(*this, 32)
         , event_thread_([this]() { handle_events(); }) {
         gimbal_yaw_motor_.configure(
-            device::LkMotor::Config{device::LkMotor::Type::MHF7015}.set_encoder_zero_point(
+            // device::LkMotor::Config{device::LkMotor::Type::MHF7015}
+            device::LkMotor::Config{device::LkMotor::Type::MG4010E_I10}.set_encoder_zero_point(
                 static_cast<int>(get_parameter("yaw_motor_zero_point").as_int())));
         gimbal_pitch_motor_.configure(
+            // device::LkMotor::Config{device::LkMotor::Type::MG410E_I10}
             device::LkMotor::Config{device::LkMotor::Type::MG4010E_I10}.set_encoder_zero_point(
                 static_cast<int>(get_parameter("pitch_motor_zero_point").as_int())));
         gimbal_left_friction_.configure(
@@ -53,7 +55,7 @@ public:
                 .set_reduction_ratio(1.));
         gimbal_right_friction_.configure(
             device::DjiMotor::Config{device::DjiMotor::Type::M3508}
-                
+
                 .set_reduction_ratio(1.));
         gimbal_bullet_feeder_.configure(
             device::DjiMotor::Config{device::DjiMotor::Type::M2006}.enable_multi_turn_angle());
@@ -146,7 +148,7 @@ private:
         tf_->set_transform<rmcs_description::PitchLink, rmcs_description::OdomImu>(
             gimbal_imu_pose.conjugate());
 
-        *gimbal_yaw_velocity_imu_   = bmi088_.gz();
+        *gimbal_yaw_velocity_imu_ = bmi088_.gz();
         *gimbal_pitch_velocity_imu_ = bmi088_.gy();
     }
     void gimbal_calibrate_subscription_callback(std_msgs::msg::Int32::UniquePtr) {

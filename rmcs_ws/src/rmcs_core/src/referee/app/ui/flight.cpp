@@ -2,7 +2,7 @@
 #include <cmath>
 #include <cstdint>
 
-#include <game_stage.hpp>
+#include <rmcs_msgs/game_stage.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/node_options.hpp>
 #include <rmcs_executor/component.hpp>

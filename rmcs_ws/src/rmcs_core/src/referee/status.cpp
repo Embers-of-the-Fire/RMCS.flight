@@ -1,13 +1,12 @@
 #include <eigen3/Eigen/Eigen>
 #include <rclcpp/node.hpp>
-
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
 #include <rmcs_msgs/robot_id.hpp>
+#include <rmcs_msgs/serial_interface.hpp>
 #include <rmcs_utility/crc/dji_crc.hpp>
 #include <rmcs_utility/package_receive.hpp>
 #include <rmcs_utility/tick_timer.hpp>
-#include <serial_interface.hpp>
 
 #include "referee/frame.hpp"
 #include "referee/status/field.hpp"
@@ -32,8 +31,12 @@ public:
         register_output("/referee/chassis/power_limit", robot_chassis_power_limit_, 0.0);
         register_output("/referee/chassis/power", robot_chassis_power_, 0.0);
         register_output("/referee/chassis/buffer_energy", robot_buffer_energy_, 60.0);
+        register_output("/referee/chassis/output_status", chassis_output_status_, false);
+
         register_output("/referee/robots/hp", robots_hp_);
         register_output("/referee/shooter/bullet_allowance", robot_bullet_allowance_, false);
+        register_output(
+            "/referee/shooter/42mm_bullet_allowance", robot_42mm_bullet_allowance_, false);
 
         register_output("/referee/shooter/initial_speed", robot_initial_speed_, false);
         register_output("/referee/shooter/shoot_timestamp", robot_shoot_timestamp_, false);
@@ -78,8 +81,8 @@ public:
         }
         if (robot_status_watchdog_.tick()) {
             RCLCPP_ERROR(logger_, "Robot status receiving timeout. Set to safe indicators.");
-            *robot_shooter_cooling_     = safe_shooter_cooling;
-            *robot_shooter_heat_limit_  = safe_shooter_heat_limit;
+            *robot_shooter_cooling_ = safe_shooter_cooling;
+            *robot_shooter_heat_limit_ = safe_shooter_heat_limit;
             *robot_chassis_power_limit_ = safe_chassis_power_limit;
         }
         if (power_heat_data_watchdog_.tick()) {
@@ -132,16 +135,22 @@ private:
 
         auto& data = reinterpret_cast<RobotStatus&>(frame_.body.data);
 
-        *robot_id_                  = static_cast<rmcs_msgs::RobotId>(data.robot_id);
-        *robot_shooter_cooling_     = data.shooter_barrel_cooling_value;
-        *robot_shooter_heat_limit_  = static_cast<int64_t>(1000) * data.shooter_barrel_heat_limit;
-        *robot_chassis_power_limit_ = static_cast<double>(data.chassis_power_limit);
+        *robot_id_ = static_cast<rmcs_msgs::RobotId>(data.robot_id);
+        *robot_shooter_cooling_ = data.shooter_barrel_cooling_value;
+        *robot_shooter_heat_limit_ = static_cast<int64_t>(1000) * data.shooter_barrel_heat_limit;
+
+        if (data.chassis_power_limit == std::numeric_limits<uint16_t>::max())
+            *robot_chassis_power_limit_ = std::numeric_limits<double>::infinity();
+        else
+            *robot_chassis_power_limit_ = static_cast<double>(data.chassis_power_limit);
+
+        *chassis_output_status_ = static_cast<bool>(data.power_management_chassis_output);
     }
 
     void update_power_heat_data() {
         power_heat_data_watchdog_.reset(3'000);
 
-        auto& data            = reinterpret_cast<PowerHeatData&>(frame_.body.data);
+        auto& data = reinterpret_cast<PowerHeatData&>(frame_.body.data);
         *robot_chassis_power_ = data.chassis_power;
         *robot_buffer_energy_ = static_cast<double>(data.buffer_energy);
     }
@@ -151,16 +160,17 @@ private:
     void update_hurt_data() {}
 
     void update_shoot_data() {
-        auto& data            = reinterpret_cast<ShootData&>(frame_.body.data);
+        auto& data = reinterpret_cast<ShootData&>(frame_.body.data);
         *robot_initial_speed_ = data.initial_speed;
 
-        const auto now          = std::chrono::high_resolution_clock::now();
+        const auto now = std::chrono::high_resolution_clock::now();
         *robot_shoot_timestamp_ = std::chrono::duration<double>(now.time_since_epoch()).count();
     }
 
     void update_bullet_allowance() {
-        auto& data               = reinterpret_cast<BulletAllowance&>(frame_.body.data);
+        auto& data = reinterpret_cast<BulletAllowance&>(frame_.body.data);
         *robot_bullet_allowance_ = data.bullet_allowance_17mm;
+        *robot_42mm_bullet_allowance_ = data.bullet_allowance_42mm;
     }
 
     void update_game_robot_position() {}
@@ -168,8 +178,8 @@ private:
     // When referee system loses connection unexpectedly,
     // use these indicators make sure the robot safe.
     // Muzzle: Cooling priority with level 1
-    static constexpr int64_t safe_shooter_cooling    = 40;
-    static constexpr int64_t safe_shooter_heat_limit = 50'000'000;
+    static constexpr int64_t safe_shooter_cooling = 40;
+    static constexpr int64_t safe_shooter_heat_limit = 50'000;
     // Chassis: Health priority with level 1
     static constexpr double safe_chassis_power_limit = 45;
 
@@ -186,6 +196,7 @@ private:
     OutputInterface<rmcs_msgs::RobotId> robot_id_;
     OutputInterface<int64_t> robot_shooter_cooling_, robot_shooter_heat_limit_;
     OutputInterface<double> robot_chassis_power_limit_;
+    OutputInterface<bool> chassis_output_status_;
 
     rmcs_utility::TickTimer power_heat_data_watchdog_;
     OutputInterface<double> robot_chassis_power_;
@@ -193,6 +204,7 @@ private:
 
     OutputInterface<GameRobotHp> robots_hp_;
     OutputInterface<uint16_t> robot_bullet_allowance_;
+    OutputInterface<uint16_t> robot_42mm_bullet_allowance_;
 
     OutputInterface<float> robot_initial_speed_;
     OutputInterface<double> robot_shoot_timestamp_;
